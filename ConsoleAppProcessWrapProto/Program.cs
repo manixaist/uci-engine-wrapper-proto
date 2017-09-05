@@ -123,7 +123,15 @@ namespace ConsoleAppProcessWrapProto
         public void OnDataReceived(object sender, DataReceivedEventArgs e)
         {
             // Write it out so we can see it for now as well
-            Console.WriteLine(e.Data);
+            if (PrintOutput)
+            {
+                Console.WriteLine(e.Data);
+            }
+            else
+            {
+                // Show some progress though...
+                Console.Write(".");
+            }
 
             // compare e.Data to the expected string
             if (e.Data.StartsWith(expected))
@@ -136,6 +144,11 @@ namespace ConsoleAppProcessWrapProto
                     // Stop listening until next command / started in SendUCICommand
                     // again this could be left up
                     process.OutputDataReceived -= OnDataReceived;
+                }
+
+                if (!PrintOutput)
+                {
+                    Console.WriteLine(); // end progress line
                 }
 
                 // Signal event that we're done processing this command
@@ -160,10 +173,17 @@ namespace ConsoleAppProcessWrapProto
             process.OutputDataReceived += new DataReceivedEventHandler(OnDataReceived);
 
             syncAfterCommand = false; // Reset from prior use
+            printOutput = true;
+
             if (expected.Length == 0)
             {
                 // No response is given, so sync to "isready/readyok"
                 syncAfterCommand = true;
+            }
+
+            if (commandString.StartsWith("go"))
+            {
+                printOutput = false; // don't draw the lines (testing)
             }
 
             Execute(process.StandardInput);
@@ -210,6 +230,14 @@ namespace ConsoleAppProcessWrapProto
         {
             get { return expected; }
         }
+
+        // Draw output field and Property
+        private bool printOutput;
+        public bool PrintOutput
+        {
+            get { return printOutput; }
+        }
+
 
         private bool syncAfterCommand = false;
         private static string IsReady = "isready";
@@ -315,7 +343,7 @@ namespace ConsoleAppProcessWrapProto
             // Use the engine interface to send some setup commands
             engine.SendUCICommand("isready", "readyok");
             engine.SendUCICommand("uci", "uciok");
-            engine.SendUCICommand("setoption name Skill Level value 10", "");
+            //engine.SendUCICommand("setoption name Skill Level value 0", "");
             engine.SendUCICommand("ucinewgame", "");
             engine.SendUCICommand("d", ""); // debug - stockfish will draw board and show FEN etc
 
@@ -323,10 +351,10 @@ namespace ConsoleAppProcessWrapProto
             string movecommand = "position startpos moves ";
             
             // Let the engine do it all for testing
-            // stop after 200 halfmoves (100 moves) or when there is no move
-            for (int count = 0; count < 200; count++)
+            // stop after 1000 halfmoves (500 moves) or when there is no move
+            for (int count = 0; count < 1000; count++)
             {
-                engine.SendUCICommand("go movetime 1500", "bestmove");
+                engine.SendUCICommand("go movetime 10000", "bestmove");
                 if (String.Compare("(none)", bestmove) != 0)
                 {
                     // each move concats the previous set of moves, as the engine will need it
