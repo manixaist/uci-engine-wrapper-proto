@@ -125,7 +125,7 @@ namespace ConsoleAppProcessWrapProto
             // Write it out so we can see it for now as well
             if (PrintOutput)
             {
-                Console.WriteLine(e.Data);
+                Console.WriteLine(String.Concat("ERSP: ", e.Data));
             }
             else
             {
@@ -136,6 +136,11 @@ namespace ConsoleAppProcessWrapProto
             // compare e.Data to the expected string
             if (e.Data.StartsWith(expected))
             {
+                if (!PrintOutput)
+                {
+                    Console.WriteLine(); // end progress line
+                }
+                
                 // raise interface event here if there is a handler
                 if (OnUCICommandExecuted != null)
                 {
@@ -145,12 +150,7 @@ namespace ConsoleAppProcessWrapProto
                     // again this could be left up
                     process.OutputDataReceived -= OnDataReceived;
                 }
-
-                if (!PrintOutput)
-                {
-                    Console.WriteLine(); // end progress line
-                }
-
+                
                 // Signal event that we're done processing this command
                 readyToExecute.Set();
             }
@@ -163,7 +163,7 @@ namespace ConsoleAppProcessWrapProto
         /// <param name="expectedResponse">response expected or empty for none</param>
         void IUCIChessEngine.SendUCICommand(string commandString, string expectedResponse)
         {
-            Console.WriteLine(commandString);
+            Console.WriteLine(String.Concat("CMD : ", commandString));
 
             command = commandString;
             expected = expectedResponse;
@@ -174,7 +174,6 @@ namespace ConsoleAppProcessWrapProto
 
             syncAfterCommand = false; // Reset from prior use
             printOutput = true;
-
             if (expected.Length == 0)
             {
                 // No response is given, so sync to "isready/readyok"
@@ -314,6 +313,7 @@ namespace ConsoleAppProcessWrapProto
         static public void UCIResponseReceivedEventHandler(object sender, UCIResponseReceivedEventArgs e)
         {
             // Raised on completion of commands
+            Console.WriteLine(String.Concat("IRSP: ", e.Response));
 
             // If we're asking for a move - then save the response we care about
             // the SAN for the move - it comes right after "bestmove"
