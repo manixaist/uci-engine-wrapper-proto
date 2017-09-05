@@ -10,57 +10,97 @@ using System.Threading.Tasks;
 
 namespace ConsoleAppProcessWrapProto
 {
-    // simple interface for interacting with the UCI engine
+    /// <summary>
+    /// Simple interface for interacting with the UCI engine
+    /// </summary>
     public interface IUCIChessEngine
     {
-        // When fired, this returns the response from the engine if any was given
+        /// <summary>
+        /// Fired when the engine has finished executing a command
+        /// </summary>
         event EventHandler<UCIResponseReceivedEventArgs> OnUCICommandExecuted;
 
+        /// <summary>
+        /// Sends a command to the engine.
+        /// </summary>
+        /// <param name="commandString">UCI protocol string</param>
+        /// <param name="expectedResponse">UCI protocol expected response, can be empty</param>
         void SendUCICommand(string commandString, string expectedResponse);
+
+        /// <summary>
+        /// Sends a quit command to the engine
+        /// </summary>
         void Quit();
     }
 
-    // Response will always be a string.  This is pretty much the same as 
-    // DataReceivedEventArgs, but mine
+    /// <summary>
+    /// Response will always be a string.  This is pretty much the same as 
+    /// DataReceivedEventArgs, but mine as I can't set the data on the other one
+    /// </summary>
     public class UCIResponseReceivedEventArgs : EventArgs
     {
+        /// <summary>
+        /// Store the response string in a class
+        /// </summary>
+        /// <param name="data">the response from the UCI engine</param>
         public UCIResponseReceivedEventArgs(string data)
         {
-            // Save the string
             response = data;
         }
 
-        // Property for response string
+        /// <summary>
+        /// stored response string
+        /// </summary>
         private readonly string response;
+
+        /// <summary>
+        /// Property accessor for response string
+        /// </summary>
         public string Response
         {
             get { return response; }
         }
     }
 
-    // Simple class to fire a command and await on the response for the engine
+    /// <summary>
+    /// Simple class to fire a command and wait on the response for the engine
+    /// </summary>
     public class UCICommand : IUCIChessEngine, IDisposable
     {
+        /// <summary>
+        /// Delegate(s) listening to our event
+        /// </summary>
         public event EventHandler<UCIResponseReceivedEventArgs> OnUCICommandExecuted;
 
-        // Fired when a command is completed fully
+        /// <summary>
+        /// Internal event fired when a command is completed fully
+        /// </summary>
         private AutoResetEvent readyToExecute = new AutoResetEvent(false);
 
+        /// <summary>
+        /// Cache the Process object
+        /// </summary>
+        /// <param name="p">Process object already created</param>
         public UCICommand(Process p)
         {
-            process = p; // cache the process object
+            process = p;
         }
 
+        /// <summary>
+        /// Cleanup
+        /// </summary>
         void IDisposable.Dispose()
         {
             // removes our handler (really we could leave this up the entire app life)
             process.OutputDataReceived -= OnDataReceived;
         }
 
-        // Thread method for the actual write of the command(s)
+        /// <summary>
+        /// Thread method for the actual write of the command
+        /// </summary>
+        /// <param name="sw">stdin StreamWriter for the process</param>
         public void ExecuteThreadProc(StreamWriter sw)
         {
-            // Write to process's redirected stdin
             sw.WriteLine(command);
 
             // if SyncAfterCommand == true, then also send IsReady and set 
@@ -75,10 +115,14 @@ namespace ConsoleAppProcessWrapProto
             // Done, exit thread - wait is elsewhere
         }
 
-        // Event handler for process stdout.  This is where we parse responses
+        /// <summary>
+        /// Event handler for process stdout.  This is where we parse responses
+        /// </summary>
+        /// <param name="sender">ignored</param>
+        /// <param name="e">The string sent to stdout</param>
         public void OnDataReceived(object sender, DataReceivedEventArgs e)
         {
-            // Write it out so we can see it for now
+            // Write it out so we can see it for now as well
             Console.WriteLine(e.Data);
 
             // compare e.Data to the expected string
@@ -99,7 +143,11 @@ namespace ConsoleAppProcessWrapProto
             }
         }
 
-        // Send a string to the engine
+        /// <summary>
+        /// Send a string to the engine
+        /// </summary>
+        /// <param name="commandString">command to sent</param>
+        /// <param name="expectedResponse">response expected or empty for none</param>
         void IUCIChessEngine.SendUCICommand(string commandString, string expectedResponse)
         {
             Console.WriteLine(commandString);
@@ -121,6 +169,9 @@ namespace ConsoleAppProcessWrapProto
             Execute(process.StandardInput);
         }
 
+        /// <summary>
+        /// Send a quit command, do not bother waiting
+        /// </summary>
         void IUCIChessEngine.Quit()
         {
             // someone should be waiting on the process quitting if they care
@@ -128,8 +179,12 @@ namespace ConsoleAppProcessWrapProto
             ((IDisposable)this).Dispose();
         }
 
-        // Spins up the thread to execute the command and waits on the response
-        // event *not* the thread
+        /// <summary>
+        /// Spins up the thread to execute the command and waits on the response
+        /// event *not* the thread to close
+        /// </summary>
+        /// <param name="sw">redirected stream for process stdin</param>
+        /// <returns>wait result</returns>
         public bool Execute(StreamWriter sw)
         {
             // Spin up a thread to do the work
@@ -142,12 +197,14 @@ namespace ConsoleAppProcessWrapProto
             return readyToExecute.WaitOne();
         }
 
+        // Command field and Property
         private string command;
         public string Command
         {
             get { return command; }
         }
 
+        // Expected field and Property
         private string expected;
         public string Expected
         {
@@ -160,7 +217,9 @@ namespace ConsoleAppProcessWrapProto
         private readonly Process process;
     }
 
-    // Wraps the actual UCI engine process
+    /// <summary>
+    /// Wraps the actual UCI engine process
+    /// </summary>
     public class ProcessWrapper
     {
         public ProcessWrapper(string name)
@@ -168,6 +227,8 @@ namespace ConsoleAppProcessWrapProto
             processName = name;
 
             p = new Process();
+
+            // Set process and startup variables
             p.EnableRaisingEvents = true;
             p.StartInfo.CreateNoWindow = true;
             p.StartInfo.RedirectStandardOutput = true;
@@ -176,19 +237,27 @@ namespace ConsoleAppProcessWrapProto
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.FileName = processName;
 
-            p.Start(); // If this fails we'll get an exception writing in a sec
+            // If this fails we'll get an exception writing in a sec
+            p.Start(); 
 
+            // Create a command class
             ucicmd = new UCICommand(p);
 
-            // Start async read
+            // Start async reading of the output stream
             p.BeginOutputReadLine();
         }
 
+        /// <summary>
+        /// Blocks until the wrapped process exits
+        /// </summary>
         public void WaitForExit()
         {
             p.WaitForExit();
         }
 
+        /// <summary>
+        /// Property to access the command class
+        /// </summary>
         public UCICommand Command
         {
             get { return ucicmd; }
@@ -197,15 +266,23 @@ namespace ConsoleAppProcessWrapProto
         private string processName;
         private Process p;
         private UCICommand ucicmd;
-
     }
 
+    /// <summary>
+    /// Main entry class for Console
+    /// </summary>
     class Program
     {
         // Testing with full path, obviously hardcoded to my machine
         static private String ProcessName = @"D:\arena_3.5.1\Engines\stockfish-8-win\Windows\stockfish_8_x64.exe";
 
         private static string bestmove = "";
+
+        /// <summary>
+        /// Handler for the IUCIChessEngine event fired after commands are processed
+        /// </summary>
+        /// <param name="sender">ignored</param>
+        /// <param name="e">holds the response string</param>
         static public void UCIResponseReceivedEventHandler(object sender, UCIResponseReceivedEventArgs e)
         {
             // Raised on completion of commands
@@ -220,35 +297,47 @@ namespace ConsoleAppProcessWrapProto
             }
         }
 
+        /// <summary>
+        /// Entry point to exe
+        /// </summary>
+        /// <param name="args"></param>
         static void Main(string[] args)
         {
+            // Create a wrapper class (starts the process)
             ProcessWrapper pw = new ProcessWrapper(ProcessName);
             
             // Add an EventHandler for the event raised when commands are finished
             pw.Command.OnUCICommandExecuted += new EventHandler<UCIResponseReceivedEventArgs>(UCIResponseReceivedEventHandler);
 
+            // Get the interface from our object
             IUCIChessEngine engine = pw.Command as IUCIChessEngine;
+
+            // Use the engine interface to send some setup commands
             engine.SendUCICommand("isready", "readyok");
             engine.SendUCICommand("uci", "uciok");
-            engine.SendUCICommand("setoption name Skill Level value 0", "");
+            engine.SendUCICommand("setoption name Skill Level value 10", "");
             engine.SendUCICommand("ucinewgame", "");
             engine.SendUCICommand("d", ""); // debug - stockfish will draw board and show FEN etc
 
             // Make some moves
             string movecommand = "position startpos moves ";
-            //engine.SendUCICommand(movecommand = String.Concat(movecommand, "e2e4"), "");
-
+            
             // Let the engine do it all for testing
-            // stop after 100 halfmoves (50 moves) or when there is no move
-            for (int count = 0; count < 100; count++)
+            // stop after 200 halfmoves (100 moves) or when there is no move
+            for (int count = 0; count < 200; count++)
             {
-                engine.SendUCICommand("go movetime 500", "bestmove");
+                engine.SendUCICommand("go movetime 1500", "bestmove");
                 if (String.Compare("(none)", bestmove) != 0)
                 {
+                    // each move concats the previous set of moves, as the engine will need it
+                    // for the next evaluation.  We could also calculate our FEN each time and
+                    // pass that, but this is far easier and faster
                     engine.SendUCICommand(movecommand = String.Concat(movecommand, " ", bestmove), "");
                 }
                 else
                 {
+                    // No more moves...could be mate or draw or resign(?)
+                    Console.WriteLine("No more moves!");
                     break;
                 }
                 engine.SendUCICommand("d", ""); // debug - stockfish will draw board and show FEN etc
